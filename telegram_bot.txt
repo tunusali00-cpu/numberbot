@@ -1,0 +1,63 @@
+import random, asyncio, os
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+
+BOT_TOKEN = os.environ.get("8617390261:AAGKQRZj6Ga-dn5lZ4zhz6Y2OG7L83JD62M")
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+class Game(StatesGroup):
+    number = State()
+
+user_scores = {}
+
+@dp.message(Command("start"))
+async def start_game(message: types.Message, state: FSMContext):
+    number = random.randint(1, 100)
+    await state.update_data(number=number, attempts=0)
+    await state.set_state(Game.number)
+    await message.answer("🎯 আমি 1 থেকে 100 এর মধ্যে একটি সংখ্যা ভেবেছি। তোমার 5টি চেষ্টা আছে!")
+
+@dp.message(Command("stat"))
+async def show_stats(message: types.Message):
+    score = user_scores.get(message.from_user.id, 0)
+    await message.answer(f"📊 তোমার মোট জয়: {score} বার")
+
+@dp.message(Command("cancel"))
+async def cancel_game(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("গেম বাতিল। /start দিয়ে নতুন খেলা শুরু করো")
+
+@dp.message(Game.number)
+async def guess_number(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    secret = user_data.get("number")
+    attempts = user_data.get("attempts", 0)
+
+    if attempts >= 5:
+        await state.clear()
+        return await message.answer(f"😔 ব্যর্থ! সংখ্যাটি ছিল {secret}। /start দিয়ে নতুন খেলা শুরু করো")
+
+    try:
+        guess = int(message.text)
+        attempts += 1
+        await state.update_data(attempts=attempts)
+
+        if guess < secret:
+            await message.answer("📉 খুব ছোট! বড় সংখ্যা ভাবো")
+        elif guess > secret:
+            await message.answer("📈 অনেক বড়! ছোট সংখ্যা ভাবো")
+        else:
+            user_scores[message.from_user.id] = user_scores.get(message.from_user.id, 0) + 1
+            await state.clear()
+            await message.answer(f"🎉 সাবাশ! {attempts} চেষ্টায় জিতে গেলেন!")
+    except ValueError:
+        await message.answer("শুধু নম্বর ইনপুট দেবে!")
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
